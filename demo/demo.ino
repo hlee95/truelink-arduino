@@ -6,14 +6,12 @@
 #define BEACON_ID 1
 
 // Keep track of pins.
-// TODO: make this correct.
-#define CAPACITIVE_TOUCH_PIN_1 4
-#define CAPACITIVE_TOUCH_PIN_2 5
-#define LED_PIN LED_BUILTIN
+const int RED_LED = 9;    // Red
+const int GREEN_LED = 6;    // Green
+const int CAPACITIVE_TOUCH_1 = 8; // Capacitive touch sensors
+const int CAPACITIVE_TOUCH_2 = 4;
 
-// If necessary, hardcode WiFi information.
-const String WIFI_NETWORK_NAME = "Hanna's_iPhone";
-const String WIFI_PASSWORD = "blahblahblah";
+int beaconIsOn = false; // If true, light does "breathing" effect during next loop.
 
 // Create Bluetooth service for this beacon.
 BLEService beaconService("19B10000-E8F2-537E-4F6C-D104768A1214");
@@ -23,20 +21,13 @@ BLECharCharacteristic beaconCharacteristic("19B10001-E8F2-537E-4F6C-D104768A1214
   BLERead | BLEWrite | BLENotify | BLEIndicate | BLEBroadcast);
 
 // Define character meanings for exchanging messages with the app.
-const char TURN_BEACON_1_ON = 'a';
-const char TURN_BEACON_2_ON = 'b';
-const char SEND_LOVE_TO_BEACON_1 = 'c';
-const char SEND_LOVE_TO_BEACON_2 = 'd';
-
-int ledValue = 0;
+const String TURN_BEACON_ON = "a";
+const char SEND_LOVE = 'b';
 
 void setup() {
   Serial.begin(9600);
 
-  // Setup digital pins.
-  pinMode(CAPACITIVE_TOUCH_PIN_1, INPUT);
-  pinMode(CAPACITIVE_TOUCH_PIN_2, INPUT);
-  pinMode(LED_PIN, OUTPUT);
+  Serial.println("Starting beacon...");
 
   // Setup BLE.
   BLE.begin();
@@ -55,24 +46,100 @@ void setup() {
   // Start advertising.
   BLE.advertise();
 
-  Serial.println("Bluetooth device active, waiting for connections...");
+  // Initialize LEDs to 0.
+  analogWrite(GREEN_LED, 0);
+  analogWrite(RED_LED, 0);
+
+  Serial.println("Beacon active, ready!");
 }
 
 void loop() {
   // Poll for BLE events.
-  BLE.poll();
+  // BLE.poll();
 
-  // Check for capacitive touch to indicate sending a value.
-  if (ledValue == 1) {
-    digitalWrite(LED_PIN, HIGH);
-  } else {
-    digitalWrite(LED_PIN, LOW);
+  int sensorValue1 = digitalRead(CAPACITIVE_TOUCH_1);
+  int sensorValue2 = digitalRead(CAPACITIVE_TOUCH_2);
+
+  // If two hand touch, blink to indicate that love was sent.
+  // And, change the beaconCharacteristic to let the server know? Maybe.
+  if (sensorValue1 && sensorValue2) {
+    Serial.println("two hands");
+    twoHandTouchHandler();
+  } else if (sensorValue1 ^ sensorValue2) {
+    Serial.println("one hand");
+    oneHandTouchHandler();
+  }
+
+  if (beaconIsOn) {
+    animateLightBreathingEffect();
   }
 }
 
-// Returns true if there is currently one touch on the lamp.
-bool oneTouch() {
-  return false;
+// Helper to be called to constantly check if someone is trying to
+// turn the beacon off.
+void updateBeaconIsOnFlag() {
+  // One hand touch should stop animation next round.
+  int sensorValue1 = digitalRead(CAPACITIVE_TOUCH_1);
+  int sensorValue2 = digitalRead(CAPACITIVE_TOUCH_2);
+  if (sensorValue1 ^ sensorValue2) {
+    beaconIsOn = false;
+  }
+}
+
+// Light up the beacon with cool breathing effect.
+void animateLightBreathingEffect() {
+  // Fade in.
+  Serial.println("Animating breathing effect...");
+  for (int i = 1; i < 51; i ++) {    
+    analogWrite(GREEN_LED, i * 1);
+    analogWrite(RED_LED, i * 5);
+
+    updateBeaconIsOnFlag();
+    
+    // Wait for 30 milliseconds to see the dimming effect.
+    delay(30);
+  }
+ 
+  // Fade out.
+  for (int i = 51 ; i >= 1; i --) {    
+    analogWrite(GREEN_LED, i*1);
+    analogWrite(RED_LED, i*5);
+
+    updateBeaconIsOnFlag();
+    
+    // Wait for 30 milliseconds to see the dimming effect.
+    delay(30);
+  }
+  Serial.println("Animating over");
+}
+
+// Handler for one hand touch event.
+void oneHandTouchHandler() {
+  beaconIsOn = false;
+}
+
+// Handler for two hand touch event.
+void twoHandTouchHandler() {
+  // Visual feedback that love was sent.
+  for (int i = 1; i < 50; i =i+7) {
+    // Sets the value (range from 0 to 255):
+    analogWrite(GREEN_LED, i * 1);
+    analogWrite(RED_LED, i * 5);
+    // Wait for 30 milliseconds to see the dimming effect
+    delay(30);
+  }
+  // Fade out from max to min in increments of 5 points.
+  for (int i = 51 ; i >= 0; i --) {
+    
+    // Sets the value (range from 0 to 255):
+    analogWrite(GREEN_LED, i*1);
+    analogWrite(RED_LED, i*5);
+
+    updateBeaconIsOnFlag();
+    
+    // Wait for 30 milliseconds to see the dimming effect
+    delay(30);
+  }
 }
 
 
@@ -82,26 +149,15 @@ void blePeripheralConnectHandler(BLEDevice central) {
   Serial.println(central.address());
 }
 
-int i = 0;
 // Handler for when the iOS device signals the beacon to light up.
+// Only called once per write, not recurring.
 void beaconCharacteristicUpdated(BLEDevice central, BLECharacteristic characteristic) {
+  String newValue = String(beaconCharacteristic.value());
   Serial.print("Got new beaconCharacteristic value ");
-  Serial.println(String(beaconCharacteristic.value()));
+  Serial.println(newValue);
 
-  if (beaconCharacteristic.value() == TURN_BEACON_1_ON) {
-    Serial.println("Turning beacon on");
-    ledValue = 1;
-  } else {
-    Serial.println("Turning beacon off");
-    ledValue = 0;
+  if (newValue == TURN_BEACON_ON) {
+    beaconIsOn = true;
   }
-
-  if (i == 0) {
-    beaconCharacteristic.setValue(SEND_LOVE_TO_BEACON_1);
-  } else if (i == 1) {
-    beaconCharacteristic.setValue(SEND_LOVE_TO_BEACON_2);
-  }
-
-  i += 1;
 }
 
