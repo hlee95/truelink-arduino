@@ -2,8 +2,15 @@
 
 #include <CurieBLE.h>
 
-// Either beacon 1 or beacon 2.
-#define BEACON_ID 1
+#define BEACON_ID 1;
+
+const char BEACON_1_SERVICE[] = "19B10000-E8F2-537E-4F6C-D104768A1214";
+const char BEACON_1_CHARACTERISTIC[] = "19B10001-E8F2-537E-4F6C-0104768A1214";
+const char BEACON_1_NAME[] = "Beacon1";
+
+const char BEACON_2_SERVICE[] = "57877ea7-250f-4011-876d-85efd2efa0dc";
+const char BEACON_2_CHARACTERISTIC[] = "56309e1c-2576-4f24-8392-721d052d08d9";
+const char BEACON_2_NAME[] = "Beacon2";
 
 // Keep track of pins.
 const int RED_LED = 9;    // Red
@@ -14,10 +21,10 @@ const int CAPACITIVE_TOUCH_2 = 4;
 int beaconIsOn = false; // If true, light does "breathing" effect during next loop.
 
 // Create Bluetooth service for this beacon.
-BLEService beaconService("19B10000-E8F2-537E-4F6C-D104768A1214");
+BLEService beaconService(BEACON_2_SERVICE);
 
 // Create beacon characteristic and allow remote device to read and write.
-BLECharCharacteristic beaconCharacteristic("19B10001-E8F2-537E-4F6C-D104768A1214",
+BLECharCharacteristic beaconCharacteristic(BEACON_2_CHARACTERISTIC,
   BLERead | BLEWrite | BLENotify | BLEIndicate | BLEBroadcast);
 
 // Define character meanings for exchanging messages with the app.
@@ -31,31 +38,36 @@ void setup() {
 
   // Setup BLE.
   BLE.begin();
-  BLE.setLocalName("Lamp1");
+  BLE.setLocalName(BEACON_2_NAME);
   BLE.setAdvertisedService(beaconService);
   beaconService.addCharacteristic(beaconCharacteristic);
+  
   BLE.addService(beaconService);
 
   // Assign event handlers for connection and writes.
   BLE.setEventHandler(BLEConnected, blePeripheralConnectHandler);
+  BLE.setEventHandler(BLEDisconnected, blePeripheralDisconnectHandler);
   beaconCharacteristic.setEventHandler(BLEWritten, beaconCharacteristicUpdated);
   
   // Set an initial value for the characteristic.
   beaconCharacteristic.setValue(0);
 
   // Start advertising.
-  BLE.advertise();
+  BLE.advertise(); // Use BLE.end() to stop advertising (and possibly disconnect?)
 
   // Initialize LEDs to 0.
   analogWrite(GREEN_LED, 0);
   analogWrite(RED_LED, 0);
+
+  Serial.println(beaconService.uuid());
+  Serial.println(beaconCharacteristic.uuid());
 
   Serial.println("Beacon active, ready!");
 }
 
 void loop() {
   // Poll for BLE events.
-  // BLE.poll();
+  BLE.poll();
 
   int sensorValue1 = digitalRead(CAPACITIVE_TOUCH_1);
   int sensorValue2 = digitalRead(CAPACITIVE_TOUCH_2);
@@ -74,6 +86,19 @@ void loop() {
     animateLightBreathingEffect();
   }
 }
+
+// Handler for when the iOS device signals the beacon to light up.
+// Only called once per write, not recurring.
+void beaconCharacteristicUpdated(BLEDevice central, BLECharacteristic characteristic) {
+  String newValue = String(beaconCharacteristic.value());
+  Serial.print("Got new beaconCharacteristic value ");
+  Serial.println(newValue);
+
+  if (newValue == TURN_BEACON_ON) {
+    beaconIsOn = true;
+  }
+}
+
 
 // Helper to be called to constantly check if someone is trying to
 // turn the beacon off.
@@ -142,22 +167,15 @@ void twoHandTouchHandler() {
   }
 }
 
-
 // Called when a central connects to this peripheral.
 void blePeripheralConnectHandler(BLEDevice central) {
   Serial.print("Connected event, central: ");
   Serial.println(central.address());
 }
 
-// Handler for when the iOS device signals the beacon to light up.
-// Only called once per write, not recurring.
-void beaconCharacteristicUpdated(BLEDevice central, BLECharacteristic characteristic) {
-  String newValue = String(beaconCharacteristic.value());
-  Serial.print("Got new beaconCharacteristic value ");
-  Serial.println(newValue);
-
-  if (newValue == TURN_BEACON_ON) {
-    beaconIsOn = true;
-  }
+// Called when a central disconnects from this peripheral.
+void blePeripheralDisconnectHandler(BLEDevice central) {
+  Serial.print("Disconnect received from central: ");
+  Serial.println(central.address());
 }
 
