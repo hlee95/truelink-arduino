@@ -8,8 +8,8 @@ const char BEACON_1_SERVICE[] = "19B10000-E8F2-537E-4F6C-D104768A1214";
 const char BEACON_1_CHARACTERISTIC[] = "19B10001-E8F2-537E-4F6C-0104768A1214";
 const char BEACON_1_NAME[] = "Beacon1";
 
-const char BEACON_2_SERVICE[] = "57877ea7-250f-4011-876d-85efd2efa0dc";
-const char BEACON_2_CHARACTERISTIC[] = "56309e1c-2576-4f24-8392-721d052d08d9";
+const char BEACON_2_SERVICE[] = "19B10000-E8F2-537E-4F6C-D104768A1215";
+const char BEACON_2_CHARACTERISTIC[] = "19B10001-E8F2-537E-4F6C-0104768A1215";
 const char BEACON_2_NAME[] = "Beacon2";
 
 // Keep track of pins.
@@ -115,25 +115,25 @@ void updateBeaconIsOnFlag() {
 void animateLightBreathingEffect() {
   // Fade in.
   Serial.println("Animating breathing effect...");
-  for (int i = 1; i < 51; i ++) {    
+  for (int i = 5; i < 51; i ++) {    
     analogWrite(GREEN_LED, i * 1);
     analogWrite(RED_LED, i * 5);
 
     updateBeaconIsOnFlag();
     
     // Wait for 30 milliseconds to see the dimming effect.
-    delay(30);
+    delay(50);
   }
  
   // Fade out.
-  for (int i = 51 ; i >= 1; i --) {    
+  for (int i = 51 ; i >= 5; i --) {    
     analogWrite(GREEN_LED, i*1);
     analogWrite(RED_LED, i*5);
 
     updateBeaconIsOnFlag();
     
     // Wait for 30 milliseconds to see the dimming effect.
-    delay(30);
+    delay(50);
   }
   Serial.println("Animating over");
 }
